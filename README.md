@@ -12,7 +12,7 @@ Meera drops a voice or text note into Telegram. The bot:
 **It never posts to LinkedIn.** Meera copies the approved draft over and publishes it herself. That's the Cut (check 07, Judgment Protected).
 
 ```
-api/webhook.py      Vercel entry point (Telegram → here)
+app.py              Vercel entry point (Telegram → /api/webhook)
 lib/pipeline.py     the flow above
 lib/prompts.py      transcription, scoring rubric, keyword, drafting prompts
 lib/gemini.py       transcribe / score / keywords / draft

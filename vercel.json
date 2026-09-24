@@ -1,5 +1,9 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/webhook.py": { "maxDuration": 300 }
+    "app.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{scripts/**,supabase/**,.venv/**,README.md}"
+    }
   }
 }
