@@ -5,7 +5,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def env(name, default=""):
-    return os.environ.get(name, default).strip()
+    """Blank values (e.g. an empty Vercel env var) fall back to the default."""
+    return os.environ.get(name, "").strip() or default
 
 
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN")

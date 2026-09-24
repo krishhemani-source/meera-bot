@@ -20,8 +20,8 @@ def app(environ, start_response):
         return [data]
 
     if IMPORT_ERROR:
-        return reply("500 Internal Server Error", {"ok": False, "startup_error": IMPORT_ERROR,
-                                                   "python": sys.version})
+        print(IMPORT_ERROR, file=sys.stderr)  # visible in Vercel → Logs
+        return reply("500 Internal Server Error", {"ok": False, "error": "startup failed, see Vercel logs"})
     if environ.get("REQUEST_METHOD") != "POST":
         return reply("200 OK", {"ok": True, "service": "meera-bot"})
 
