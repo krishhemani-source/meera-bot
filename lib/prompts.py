@@ -27,7 +27,7 @@ Hard caps (score no higher than 3):
 
 Judge only what is in the note. Do not reward a note for what a writer could invent around it."""
 
-SCORE_USER = "Note:\n\"\"\"\n{note}\n\"\"\"\n\nReturn JSON with: score (integer 0-10), reason (one line, plain English, addressed to Meera, max 25 words), angle (one line: the post's core point if it were drafted, or empty string)."
+SCORE_USER = "Note:\n\"\"\"\n{note}\n\"\"\"\n\nReturn JSON with: score (integer 0-10), reason (one line, plain English, addressed to Meera, max 25 words), angle (one line: the post's core point if it were drafted, or empty string), search_phrase (2-5 words to find a recent India-relevant skincare / cosmetics industry or regulation news story on this topic; prefer the ingredient, regulation or trend over generic words)."
 
 KEYWORDS = (
     "From this note, extract 3-5 search terms and combine them into ONE short news "

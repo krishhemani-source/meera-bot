@@ -96,8 +96,13 @@ def process_note(note, chat_id, source, reply_to=None, send=None):
     # 2. News angle (Google News RSS)
     stories, phrase = [], ""
     try:
-        phrase = gemini.keywords(note).get("phrase", "")
+        # Search phrase comes from the scoring call (saves a Gemini request); fall back if missing.
+        phrase = s.get("search_phrase") or gemini.keywords(note).get("phrase", "")
         stories = news.search(phrase, limit=3)
+        if not stories and len(phrase.split()) > 2:
+            # Too specific: widen to the first two words and a 90-day window.
+            phrase = " ".join(phrase.split()[:2])
+            stories = news.search(phrase, limit=3, days=90)
     except Exception:
         traceback.print_exc()
 
@@ -221,10 +226,15 @@ def handle_update(update):
         elif text and not text.startswith("/"):
             telegram.typing(chat_id)
             process_note(text, chat_id, "text", reply_to=msg["message_id"])
+    except gemini.QuotaExhausted:
+        traceback.print_exc()
+        telegram.send(chat_id, "Gemini's free daily limit is used up on every model right now, so I couldn't "
+                               "process that note. It resets around 12:30pm IST — send it again after that. "
+                               "(Turning on billing in Google AI Studio removes this limit.)")
     except Exception as e:
         traceback.print_exc()
-        telegram.send(chat_id, f"Something went wrong processing that note ({type(e).__name__}). "
-                               "Please send it again in a minute.")
+        telegram.send(chat_id, f"Something went wrong processing that note ({type(e).__name__}: "
+                               f"{str(e)[:120]}). Please send it again in a minute.")
 
 
 def _allowed(chat_id):

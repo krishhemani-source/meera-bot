@@ -16,17 +16,35 @@ def client():
     return _client
 
 
+class QuotaExhausted(Exception):
+    """Every Gemini model in the chain is out of quota or unavailable."""
+
+
 def _generate(**kwargs):
-    """generate_content with backoff on overload / rate limits (Gemini 503s are common at peak)."""
-    for attempt in range(5):
-        try:
-            resp = client().models.generate_content(model=config.GEMINI_MODEL, **kwargs)
-            parts = resp.candidates[0].content.parts if resp.candidates else []
-            return "".join(p.text for p in parts if getattr(p, "text", None) and not getattr(p, "thought", False)).strip()
-        except (errors.ServerError, errors.ClientError) as e:
-            if getattr(e, "code", None) not in (429, 500, 503) or attempt == 4:
+    """generate_content across a chain of models.
+
+    429 (daily free-tier quota) or 404 -> next model straight away.
+    503/500 (overloaded) -> one quick retry, then next model.
+    """
+    last = None
+    for model in [config.GEMINI_MODEL] + [m for m in config.GEMINI_FALLBACK_MODELS if m != config.GEMINI_MODEL]:
+        for attempt in range(2):
+            try:
+                resp = client().models.generate_content(model=model, **kwargs)
+                parts = resp.candidates[0].content.parts if resp.candidates else []
+                return "".join(p.text for p in parts
+                               if getattr(p, "text", None) and not getattr(p, "thought", False)).strip()
+            except (errors.ServerError, errors.ClientError) as e:
+                last = e
+                code = getattr(e, "code", None)
+                if code in (500, 503) and attempt == 0:
+                    time.sleep(2)
+                    continue
+                if code in (429, 404, 500, 503):
+                    print(f"gemini {model}: {code}, trying next model")
+                    break
                 raise
-            time.sleep(2 ** attempt * 2)
+    raise QuotaExhausted(str(last)[:200])
 
 
 def _json(contents, schema, system=None):
@@ -55,8 +73,9 @@ def score(note):
             "score": {"type": "integer", "minimum": 0, "maximum": 10},
             "reason": {"type": "string"},
             "angle": {"type": "string"},
+            "search_phrase": {"type": "string"},
         },
-        "required": ["score", "reason", "angle"],
+        "required": ["score", "reason", "angle", "search_phrase"],
     }
     out = _json(prompts.SCORE_USER.format(note=note), schema, system=prompts.SCORE_SYSTEM)
     out["score"] = max(0, min(10, int(out["score"])))

@@ -16,6 +16,12 @@ ALLOWED_CHAT_IDS = {c.strip() for c in env("ALLOWED_CHAT_IDS").split(",") if c.s
 
 GEMINI_API_KEY = env("GEMINI_API_KEY")
 GEMINI_MODEL = env("GEMINI_MODEL", "gemini-3.6-flash")
+# Tried in order when the main model is out of quota (free tier: ~20 requests/day per model) or overloaded.
+GEMINI_FALLBACK_MODELS = [m.strip() for m in env(
+    "GEMINI_FALLBACK_MODELS",
+    "gemini-3.5-flash,gemini-3-flash-preview,gemini-3.8-flash,gemini-3.7-flash,"
+    "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest",
+).split(",") if m.strip()]
 
 # If set, drafts are written by Claude (holds voice better); otherwise Gemini drafts.
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY")
