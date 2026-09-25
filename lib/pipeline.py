@@ -17,7 +17,8 @@ REJECT_WORDS = {"reject", "rejected", "no"}
 HELP = (
     "Send me a voice note or a text note.\n\n"
     "I'll transcribe it, score it 0–10, and if it scores {t} or above I'll draft a LinkedIn post "
-    "in your voice. Reply APPROVE or REJECT to a draft (or use the buttons).\n\n"
+    "in your voice, with a current news angle from Google News. Reply APPROVE or REJECT to a draft (or use the buttons).\n\n"
+    "/news <topic> — latest Google News headlines on any topic.\n\n"
     "Nothing is ever posted for you. You copy the approved draft into LinkedIn yourself.\n\n"
     "This chat's id: {chat_id}"
 )
@@ -45,11 +46,14 @@ def verify_flag(item):
     )
 
 
-def write_draft(note, angle, item):
-    """Returns (post_text, used_news: bool, model_name)."""
+def write_draft(note, angle, stories):
+    """Returns (post_text, story_used_or_None, model_name)."""
     system = prompts.DRAFT_SYSTEM.format(voice_skill=voice_skill())
-    if item:
-        user = prompts.DRAFT_USER_WITH_NEWS.format(note=note, angle=angle or "-", **item)
+    if stories:
+        listing = "\n\n".join(
+            f"[{n}] Headline: {s['headline']}\nPublication: {s['source']}\nDate: {s['date']}\nSummary: {s['summary']}"
+            for n, s in enumerate(stories, 1))
+        user = prompts.DRAFT_USER_WITH_NEWS.format(note=note, angle=angle or "-", news=listing)
     else:
         user = prompts.DRAFT_USER_NO_NEWS.format(note=note, angle=angle or "-")
 
@@ -62,12 +66,13 @@ def write_draft(note, angle, item):
     if not text:
         text, model = gemini.draft(system, user), config.GEMINI_MODEL
 
-    used = False
-    m = re.search(r"\n?\s*NEWS_USED:\s*(yes|no)\s*$", text, re.I)
+    used = None
+    m = re.search(r"\n?\s*NEWS_USED:\s*\[?(\w+)\]?\s*$", text, re.I)
     if m:
-        used = m.group(1).lower() == "yes"
         text = text[: m.start()].rstrip()
-    return text, used and bool(item), model
+        if m.group(1).isdigit() and 1 <= int(m.group(1)) <= len(stories):
+            used = stories[int(m.group(1)) - 1]
+    return text, used, model
 
 
 def process_note(note, chat_id, source, reply_to=None, send=None):
@@ -88,24 +93,24 @@ def process_note(note, chat_id, source, reply_to=None, send=None):
     send(chat_id, f"Score: {s['score']}/10 — drafting.\n{s['reason']}", reply_to=reply_to)
     store.update_note(note_id, status="drafting")
 
-    # 2. News angle
-    item = None
+    # 2. News angle (Google News RSS)
+    stories, phrase = [], ""
     try:
-        kw = gemini.keywords(note)
-        item = news.top_story(kw.get("phrase", ""))
+        phrase = gemini.keywords(note).get("phrase", "")
+        stories = news.search(phrase, limit=3)
     except Exception:
         traceback.print_exc()
 
     # 3. Draft in her voice
-    post, used_news, model = write_draft(note, s["angle"], item)
-    body = post + ("\n\n" + verify_flag(item) if used_news else "")
+    post, item, model = write_draft(note, s["angle"], stories)
+    body = post + ("\n\n" + verify_flag(item) if item else "")
 
     draft_id = store.save_draft(
         note_id=note_id, chat_id=chat_id, body=body, model=model, status="pending",
-        news_headline=item["headline"] if used_news else None,
-        news_source=item["source"] if used_news else None,
-        news_date=item["date"] if used_news else None,
-        news_url=item["url"] if used_news else None,
+        news_headline=item["headline"] if item else None,
+        news_source=item["source"] if item else None,
+        news_date=item["date"] if item else None,
+        news_url=item["url"] if item else None,
     )
     store.update_note(note_id, status="drafted")
 
@@ -114,7 +119,14 @@ def process_note(note, chat_id, source, reply_to=None, send=None):
                 {"text": "Reject", "callback_data": f"r:{draft_id or ''}"}]]
     ids = send(chat_id, header + body, buttons=buttons)
     store.update_draft(draft_id, telegram_message_ids=ids)
-    return {"score": s, "draft": body, "news": item, "used_news": used_news, "model": model}
+
+    # Always show what the news search found, so Meera can see the angle even if it wasn't used.
+    if stories:
+        note_used = "Used in the draft: #%d." % (stories.index(item) + 1) if item else "None fitted, so the draft doesn't use one."
+        send(chat_id, f"News search (Google News): \"{phrase}\"\n\n{news.format_list(stories)}\n\n{note_used}")
+    else:
+        send(chat_id, f"News search (Google News): \"{phrase or '-'}\" — nothing recent found.")
+    return {"score": s, "draft": body, "news": stories, "used": item, "model": model}
 
 
 def decide(chat_id, draft, approve, message_id=None):
@@ -171,6 +183,16 @@ def handle_update(update):
         telegram.send(chat_id, HELP.format(t=config.SCORE_THRESHOLD, chat_id=chat_id))
         return
     if not _allowed(chat_id):
+        return
+
+    if text.startswith("/news"):
+        topic = text[len("/news"):].strip()
+        if not topic:
+            telegram.send(chat_id, "Usage: /news <topic>   e.g. /news niacinamide India")
+            return
+        stories = news.search(topic, limit=5)
+        telegram.send(chat_id, f"Google News: \"{topic}\" (last 30 days)\n\n{news.format_list(stories)}"
+                      if stories else f"No recent Google News results for \"{topic}\".")
         return
 
     try:

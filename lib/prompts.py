@@ -47,7 +47,7 @@ DRAFT_SYSTEM = """You are drafting a LinkedIn post that Meera Pillai will review
 Hard rules:
 - Use only facts that are in her note or in the news item provided. Never invent numbers, studies, percentages, customer stories, or Skinstinct practices. If a beat of the six-beat structure needs a fact the note doesn't give, keep that beat short and general, or skip it — do not fabricate.
 - Where a specific number would help but isn't in the note, write [Meera: add figure] so she can fill it in.
-- Output the post text only, then on the very last line exactly one of: NEWS_USED: yes  or  NEWS_USED: no"""
+- Output the post text only, then on the very last line exactly: NEWS_USED: <number of the news item you used>  or  NEWS_USED: none"""
 
 DRAFT_USER_WITH_NEWS = """Meera's note:
 \"\"\"
@@ -56,13 +56,10 @@ DRAFT_USER_WITH_NEWS = """Meera's note:
 
 Core angle identified at triage: {angle}
 
-Current news item:
-Headline: {headline}
-Publication: {source}
-Date: {date}
-Summary: {summary}
+Current news items (Google News, last 30 days):
+{news}
 
-If this news item is genuinely relevant, use it to make the post timely — refer to it accurately and only for what the headline/summary actually says. If it doesn't fit naturally, ignore it."""
+If one of these items is genuinely relevant, use at most one of them to make the post timely — refer to it accurately and only for what its headline/summary actually says. If none fits naturally, ignore them all."""
 
 DRAFT_USER_NO_NEWS = """Meera's note:
 \"\"\"
