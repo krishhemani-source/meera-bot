@@ -23,7 +23,14 @@ def app(environ, start_response):
         print(IMPORT_ERROR, file=sys.stderr)  # visible in Vercel → Logs
         return reply("500 Internal Server Error", {"ok": False, "error": "startup failed, see Vercel logs"})
     if environ.get("REQUEST_METHOD") != "POST":
-        return reply("200 OK", {"ok": True, "service": "meera-bot"})
+        # Which settings are present (never their values) — for debugging deploys.
+        return reply("200 OK", {"ok": True, "service": "meera-bot", "configured": {
+            "TELEGRAM_BOT_TOKEN": bool(config.TELEGRAM_BOT_TOKEN),
+            "GEMINI_API_KEY": bool(config.GEMINI_API_KEY),
+            "TELEGRAM_WEBHOOK_SECRET": bool(config.TELEGRAM_WEBHOOK_SECRET),
+            "ALLOWED_CHAT_IDS": len(config.ALLOWED_CHAT_IDS),
+            "GEMINI_MODEL": config.GEMINI_MODEL,
+        }})
 
     secret = environ.get("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN", "")
     if config.TELEGRAM_WEBHOOK_SECRET and secret != config.TELEGRAM_WEBHOOK_SECRET:
